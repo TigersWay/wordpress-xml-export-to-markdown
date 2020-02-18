@@ -1,0 +1,32 @@
+{
+  "name": "wordpress-xml-export-to-markdown",
+  "description": "From Wordpress to Markdown files for Static Generator(s)",
+  "keywords": [
+    "nodejs",
+    "wordpress",
+    "export",
+    "xml",
+    "markdown",
+    "static-site-generator"
+  ],
+  "version": "0.2.1",
+  "license": "MIT",
+  "author": "Ben Michaud <ben@tigersway.net>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TigersWay/wordpress-xml-export-to-markdown.git"
+  },
+  "bin": {
+    "wp2md": "./index.js"
+  },
+  "scripts": {
+    "test": "node .  -i export.xml"
+  },
+  "dependencies": {
+    "chalk": "^3.0.0",
+    "command-line-args": "^5.1.1",
+    "turndown": "^5.0.3",
+    "xml2js": "^0.4.23",
+    "xml2js-xpath": "^0.11.0"
+  }
+}
