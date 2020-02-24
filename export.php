@@ -1,7 +1,7 @@
 <?php
 /**
  * Generic export bricks from wordpress
- * v0.2.1
+ * v0.2.2
  * Ben Michaud <ben@tigersway.net>
  *
  * Features:
@@ -10,10 +10,8 @@
  * - Categories
  * - Pages
  * - Posts
- *
- * WPML
- *  - Posts/Pages language code
-  */
+ * - WPML: Posts/Pages language code
+ */
 ?><!doctype html>
 <html lang="en">
 <head>

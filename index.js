@@ -39,6 +39,8 @@ const HTMLtoMardown = (html) => {
 
 // And run!
 
+let baseURL;
+
 fs.readFile(args.input, (error, data) => {
   if (error) {
     console.error(chalk.red(`Can't access <${args.input}>!`));
@@ -53,7 +55,7 @@ fs.readFile(args.input, (error, data) => {
 
     if (!fs.existsSync(args.output)) fs.mkdirSync(args.output, {recursive: true});
 
-    let baseURL = new URL(xpath.evalFirst(result, `//options/siteurl`));
+    baseURL = new URL(xpath.evalFirst(result, `//options/siteurl`));
     baseURL = stripTrailingSlash(baseURL.host + baseURL.pathname);
     console.log(chalk.magenta(baseURL));
 
@@ -104,14 +106,15 @@ const cleanCategorySlug = (str) => {
     .replace(/(?:bangkok|cambodge|laos|malaisie|myanmar|thailande)-(?:transports-)*(\w+)/, '$1');
 }
 
-const stripBaseAssets = (str) => {
+const stripBase = (str) => {
   return str
-    .replace(/"https?:\/\/theo-courant.com\/wp-content\/uploads\/(.*?)"/g, '"/uploads/$1"')
-    .replace(/"https?:\/\/theo-courant.com\/(.*?)"/g, '"/$1"');
+    .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?)`, 'g'), '/static/images/$1')
+    .replace(new RegExp(`https?:\/\/${baseURL}\/(.*?)`, 'g'), '/$1');
 }
 
 const validatePage = (page) => {
-  page.post_content = stripBaseAssets(page.post_content);
+  page.post_content = stripBase(page.post_content);
+  page.featured = stripBase(page.featured);
   return true;
 }
 
@@ -121,11 +124,17 @@ const savePage = (page) => {
   content += `title: "${htmlEntities(page.post_title)}"\n`;
   content += `date: ${new Date(page.post_date_gmt+'Z').toISOString()}\n`;
   content += `updated: ${new Date(page.post_modified_gmt+'Z').toISOString()}\n`;
-  content += `featured: ${stripBaseAssets(page.featured)}\n`;
+  content += `featured: ${page.featured}\n`;
+  content += `wpID: ${page.ID}\n`;
   content += `---\n`;
   content += `<!--\n${page.post_content}\n-->\n${HTMLtoMardown(page.post_content)}\n`;
 
-  let fullpathname = [args.output, page.language_code, page.path, 'index.md'].join('/');
+  let fullpathname;
+  if (~[3504, 19674, 46895].indexOf(Number(page.ID))) {
+    fullpathname = [args.output, page.language_code, page.post_name+'.md'].join('/');
+  } else {
+    fullpathname = [args.output, page.language_code, page.path, 'index.md'].join('/');
+  }
   if (!fs.existsSync(path.dirname(fullpathname))) fs.mkdirSync(path.dirname(fullpathname), {recursive: true});
   fs.writeFileSync(fullpathname, content);
 }
@@ -135,7 +144,8 @@ const validatePost = (post) => {
   if (typeof post.category === 'undefined') return;
   if (typeof post.category[0] !== 'undefined') return;
 
-  post.post_content = stripBaseAssets(post.post_content);
+  post.post_content = stripBase(post.post_content);
+  post.featured = stripBase(post.featured);
   return true;
 }
 
@@ -148,20 +158,28 @@ const savePost = (post, result) => {
 
   let fullpathname = '';
   let category = post.category;
+  let tags = [];
+  let tmp;
   if (typeof category !== 'undefined' || typeof category.slug !== 'undefined') {
     category = xpath.evalFirst(result, `//categories/category[slug='${category.slug}']`);
-    fullpathname = cleanCategorySlug(category.slug);
+    tmp = cleanCategorySlug(category.slug);
+    tags.push(tmp);
+    fullpathname = tmp;
     while (category.parent) {
       let category2 = xpath.evalFirst(result, `//categories/category[slug='${category.parent}']`);
       category = {...category2};
-      fullpathname = cleanCategorySlug(category.slug) + '/' + fullpathname;
+      tmp = cleanCategorySlug(category.slug);
+      tags.push(tmp);
+      fullpathname = tmp + '/' + fullpathname;
     }
   }
+  tags.reverse();
 
-  let tags = xpath.find(post, `//tag/slug`);
+  tags = tags.concat(xpath.find(post, `//tag/slug`).filter(tag => tags.indexOf(tag) < 0));
   if (tags) content += `tags: [${tags.join(',')}]\n`;
 
-  content += `featured: ${stripBaseAssets(post.featured)}\n`;
+  content += `featured: ${post.featured}\n`;
+  content += `wpID: ${post.ID}\n`;
   content += `---\n`;
   content += `<!--\n${post.post_content}\n-->\n${HTMLtoMardown(post.post_content)}\n`;
 
