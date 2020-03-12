@@ -8,4 +8,5 @@ pnpm-lock.yaml
 
 # Project
 wordpress/
-*.xml
+export.xml
+attachments.*

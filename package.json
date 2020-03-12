@@ -9,7 +9,7 @@
     "markdown",
     "static-site-generator"
   ],
-  "version": "0.2.1",
+  "version": "0.2.4",
   "license": "MIT",
   "author": "Ben Michaud <ben@tigersway.net>",
   "repository": {
@@ -20,12 +20,13 @@
     "wp2md": "./index.js"
   },
   "scripts": {
-    "test": "node .  -i export.xml"
+    "wp2md": "rm -rf wordpress && node .  -i export.xml"
   },
   "dependencies": {
     "chalk": "^3.0.0",
     "command-line-args": "^5.1.1",
-    "turndown": "^5.0.3",
+    "remove-accents": "^0.4.2",
+    "turndown": "^6.0.0",
     "xml2js": "^0.4.23",
     "xml2js-xpath": "^0.11.0"
   }

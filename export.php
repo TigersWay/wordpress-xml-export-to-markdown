@@ -1,7 +1,7 @@
 <?php
 /**
  * Generic export bricks from wordpress
- * v0.2.2
+ * v0.2.4
  * Ben Michaud <ben@tigersway.net>
  *
  * Features:
@@ -11,6 +11,7 @@
  * - Pages
  * - Posts
  * - WPML: Posts/Pages language code
+ * - Images / Attachments
  */
 ?><!doctype html>
 <html lang="en">
@@ -93,10 +94,18 @@ function fixSerializedObject($strObject) {
   return unserialize(preg_replace('/O:\d+:"[^"]++"/', 'O:8:"stdClass"', $strObject));
 }
 
-
+function saveAttachment($url) {
+  static $first = true;
+  if ($first) {
+    fclose(fopen('./attachments.txt', 'w'));
+    $first = false;
+  }
+  file_put_contents ('./attachments.txt', preg_replace('/.*\/wp-content\/uploads\/(.*)$/', "$1", $url) . "\n", FILE_APPEND);
+}
 
 $xml = new XMLExport();
 $xml->startElement('wordpress');
+
 
 
 $xml->startElement('options');
@@ -149,11 +158,17 @@ FROM {$wpdb->prefix}posts P
     LEFT JOIN {$wpdb->prefix}posts P3 ON P2.post_parent=P3.ID
       LEFT JOIN {$wpdb->prefix}posts P4 ON P3.post_parent=P4.ID
 WHERE P.post_type='page' AND P.post_status='publish' AND element_type='post_page'
-
 EOT);
 foreach($items as $item) {
   echo $item->post_title . '<br>';
   $xml->startElement('page'); $xml->elements($item); $xml->endElement();
+
+  if ($item->featured) saveAttachment($item->featured);
+  $urls = [];
+  preg_match_all('/https?:\/\/theo-courant.com\/wp-content\/uploads\/.*?(?:jpg|jpeg|png|gif)/i', $item->post_content, $urls);
+  if ($urls) {
+    foreach($urls[0] as $url) saveAttachment($url);
+  }
 }
 echo "</div><p><i>" . sizeof($items) . " pages</i></p>\n";
 unset($items);
@@ -213,10 +228,10 @@ $items = $wpdb->get_results(<<<EOT
 SELECT
   P.*,
   language_code,
-  (SELECT DISTINCT guid
-    FROM {$wpdb->prefix}postmeta
-      JOIN {$wpdb->prefix}posts ON meta_value=ID
-    WHERE post_id=P.ID AND meta_key='_thumbnail_id') 'featured'
+  (SELECT DISTINCT M2.meta_value
+    FROM {$wpdb->prefix}postmeta M1
+      LEFT JOIN {$wpdb->prefix}postmeta M2 ON M1.meta_value=M2.post_id
+    WHERE M1.post_id=P.ID AND M1.meta_key='_thumbnail_id' AND M2.meta_key='_wp_attached_file') 'featured'
 FROM {$wpdb->prefix}posts P
   LEFT JOIN {$wpdb->prefix}icl_translations T ON ID=element_id
 WHERE post_type='post' AND post_status='publish' AND element_type='post_post'
@@ -227,6 +242,13 @@ foreach($items as $item) {
   $xml->elements($item, ['post_title', 'post_content']);
   terms($item->ID);
   $xml->endElement();
+
+  if ($item->featured) saveAttachment($item->featured);
+  $urls = [];
+  preg_match_all('/https?:\/\/theo-courant.com\/wp-content\/uploads\/.*?(?:jpg|jpeg|png|gif)/i', $item->post_content, $urls);
+  if ($urls) {
+    foreach($urls[0] as $url) saveAttachment($url);
+  }
 }
 echo "</div><p><i>" . sizeof($items) . " posts</i></p>\n";
 unset($items);

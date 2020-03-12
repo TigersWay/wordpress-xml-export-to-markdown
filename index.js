@@ -4,6 +4,7 @@
 
 const xml2js = require("xml2js");
 const xpath = require("xml2js-xpath");
+const accents = require('remove-accents');
 const cmdLineArgs = require('command-line-args');
 const chalk = require('chalk');
 
@@ -88,10 +89,6 @@ const stripTrailingSlash = (str) => {
   return str.replace(/\/$/, '');
 }
 
-const stripAccents = (str) => {
-  return str.replace(/[é]/g, 'e');
-}
-
 const htmlEntities = (str) => {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -106,9 +103,15 @@ const cleanCategorySlug = (str) => {
     .replace(/(?:bangkok|cambodge|laos|malaisie|myanmar|thailande)-(?:transports-)*(\w+)/, '$1');
 }
 
+const replaceAttachment = (match, p1, p2, offset, string) => {
+  let cleaned = accents.remove(decodeURI(p1)).toLowerCase();
+  fs.appendFileSync(path.join(args.output, 'attachment.txt'), `curl -sk -A Export --create-dirs -o "${cleaned}.${p2}" "https://${baseURL}/wp-content/uploads/${p1}.${p2}"\n`);
+  return `/static/images/${cleaned}.${p2}`;
+}
+
 const stripBase = (str) => {
   return str
-    .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?)`, 'g'), '/static/images/$1')
+    .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), replaceAttachment)
     .replace(new RegExp(`https?:\/\/${baseURL}\/(.*?)`, 'g'), '/$1');
 }
 
