@@ -9,7 +9,7 @@
     "markdown",
     "static-site-generator"
   ],
-  "version": "0.2.4",
+  "version": "0.2.5",
   "license": "MIT",
   "author": "Ben Michaud <ben@tigersway.net>",
   "repository": {
@@ -25,7 +25,6 @@
   "dependencies": {
     "chalk": "^3.0.0",
     "command-line-args": "^5.1.1",
-    "remove-accents": "^0.4.2",
     "turndown": "^6.0.0",
     "xml2js": "^0.4.23",
     "xml2js-xpath": "^0.11.0"

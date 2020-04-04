@@ -4,7 +4,7 @@
 
 const xml2js = require("xml2js");
 const xpath = require("xml2js-xpath");
-const accents = require('remove-accents');
+// const accents = require('remove-accents');
 const cmdLineArgs = require('command-line-args');
 const chalk = require('chalk');
 
@@ -32,6 +32,21 @@ const HTMLtoMardown = (html) => {
   const turndownService = new require('turndown')({
     headingStyle: 'atx',
     bulletListMarker: '-'
+  });
+
+  turndownService.addRule('images', {
+    filter: ['img'],
+    replacement: (content, node, options) => {
+      let attr = {
+        src: node.getAttribute('src'),
+        alt: node.getAttribute('alt') ? node.getAttribute('alt') : path.parse(node.getAttribute('src')).name.replace(/-+\d{1,}x\d{1,}$/, ''),
+        width: node.getAttribute('width') ? node.getAttribute('width') : '',
+        height: node.getAttribute('height') ? node.getAttribute('height') : '',
+      }
+      let dimension = (attr.width || attr.height) ? ` =${attr.width}x${attr.height}` : ''
+      
+      return `![${attr.alt}](${attr.src}${dimension})`;
+    }
   });
 
   return turndownService.turndown(html);
@@ -103,21 +118,23 @@ const cleanCategorySlug = (str) => {
     .replace(/(?:bangkok|cambodge|laos|malaisie|myanmar|thailande)-(?:transports-)*(\w+)/, '$1');
 }
 
-const replaceAttachment = (match, p1, p2, offset, string) => {
-  let cleaned = accents.remove(decodeURI(p1)).toLowerCase();
-  fs.appendFileSync(path.join(args.output, 'attachment.txt'), `curl -sk -A Export --create-dirs -o "${cleaned}.${p2}" "https://${baseURL}/wp-content/uploads/${p1}.${p2}"\n`);
-  return `/static/images/${cleaned}.${p2}`;
-}
+// const replaceAttachment = (match, p1, p2, offset, string) => {
+//   let cleaned = accents.remove(decodeURI(p1)).toLowerCase();
+//   fs.appendFileSync(path.join(args.output, 'attachment.txt'), `curl -sk -A Export --create-dirs -o "${cleaned}.${p2}" "https://${baseURL}/wp-content/uploads/${p1}.${p2}"\n`);
+//   return `/static/images/${cleaned}.${p2}`;
+// }
 
 const stripBase = (str) => {
   return str
-    .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), replaceAttachment)
+    // .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), replaceAttachment)
+    .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), '/static/images/$1.$2')
     .replace(new RegExp(`https?:\/\/${baseURL}\/(.*?)`, 'g'), '/$1');
 }
 
 const validatePage = (page) => {
   page.post_content = stripBase(page.post_content);
-  page.featured = stripBase(page.featured);
+  // page.featured = stripBase(page.featured);
+  if (page.featured) page.featured = '/static/images/' + page.featured;
   return true;
 }
 
@@ -127,16 +144,17 @@ const savePage = (page) => {
   content += `title: "${htmlEntities(page.post_title)}"\n`;
   content += `date: ${new Date(page.post_date_gmt+'Z').toISOString()}\n`;
   content += `updated: ${new Date(page.post_modified_gmt+'Z').toISOString()}\n`;
-  content += `featured: ${page.featured}\n`;
+  if (page.featured) content += `featured: ${page.featured}\n`;
   content += `wpID: ${page.ID}\n`;
   content += `---\n`;
-  content += `<!--\n${page.post_content}\n-->\n${HTMLtoMardown(page.post_content)}\n`;
+  // content += `<!--\n${page.post_content}\n-->\n${HTMLtoMardown(page.post_content)}\n`;
+  content += HTMLtoMardown(page.post_content);
 
   let fullpathname;
   if (~[3504, 19674, 46895].indexOf(Number(page.ID))) {
     fullpathname = [args.output, page.language_code, page.post_name+'.md'].join('/');
   } else {
-    fullpathname = [args.output, page.language_code, page.path, 'index.md'].join('/');
+    fullpathname = [args.output, page.language_code, page.path, '_index.md'].join('/');
   }
   if (!fs.existsSync(path.dirname(fullpathname))) fs.mkdirSync(path.dirname(fullpathname), {recursive: true});
   fs.writeFileSync(fullpathname, content);
@@ -148,7 +166,8 @@ const validatePost = (post) => {
   if (typeof post.category[0] !== 'undefined') return;
 
   post.post_content = stripBase(post.post_content);
-  post.featured = stripBase(post.featured);
+  // post.featured = stripBase(post.featured);
+  if (post.featured) post.featured = '/static/images/' + post.featured;
   return true;
 }
 
@@ -166,13 +185,13 @@ const savePost = (post, result) => {
   if (typeof category !== 'undefined' || typeof category.slug !== 'undefined') {
     category = xpath.evalFirst(result, `//categories/category[slug='${category.slug}']`);
     tmp = cleanCategorySlug(category.slug);
-    tags.push(tmp);
+    // tags.push(tmp);
     fullpathname = tmp;
     while (category.parent) {
       let category2 = xpath.evalFirst(result, `//categories/category[slug='${category.parent}']`);
       category = {...category2};
       tmp = cleanCategorySlug(category.slug);
-      tags.push(tmp);
+      // tags.push(tmp);
       fullpathname = tmp + '/' + fullpathname;
     }
   }
@@ -181,10 +200,11 @@ const savePost = (post, result) => {
   tags = tags.concat(xpath.find(post, `//tag/slug`).filter(tag => tags.indexOf(tag) < 0));
   if (tags) content += `tags: [${tags.join(',')}]\n`;
 
-  content += `featured: ${post.featured}\n`;
+  if (post.featured) content += `featured: ${post.featured}\n`;
   content += `wpID: ${post.ID}\n`;
   content += `---\n`;
-  content += `<!--\n${post.post_content}\n-->\n${HTMLtoMardown(post.post_content)}\n`;
+  // content += `<!--\n${post.post_content}\n-->\n${HTMLtoMardown(post.post_content)}\n`;
+  content += HTMLtoMardown(post.post_content);
 
   fullpathname = [args.output, post.language_code, fullpathname , post.post_name+'.md'].join('/');
   if (!fs.existsSync(path.dirname(fullpathname))) fs.mkdirSync(path.dirname(fullpathname), {recursive: true});

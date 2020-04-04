@@ -1,7 +1,7 @@
 <?php
 /**
  * Generic export bricks from wordpress
- * v0.2.4
+ * v0.2.5
  * Ben Michaud <ben@tigersway.net>
  *
  * Features:
@@ -11,7 +11,7 @@
  * - Pages
  * - Posts
  * - WPML: Posts/Pages language code
- * - Images / Attachments
+ * - Images / Attachments / Featured
  */
 ?><!doctype html>
 <html lang="en">
@@ -35,7 +35,8 @@ require('./wp-load.php');
 
 global $wpdb;
 
-// $wpdb->select('theo-courant');
+// theo-courant
+$wpdb->select('4443919-1');
 
 
 
@@ -147,10 +148,10 @@ $items = $wpdb->get_results(<<<EOT
 SELECT
   P.*,
   language_code,
-  (SELECT DISTINCT guid
-    FROM {$wpdb->prefix}postmeta
-      JOIN {$wpdb->prefix}posts ON meta_value=ID
-    WHERE post_id=P.ID AND meta_key='_thumbnail_id') 'featured',
+  (SELECT DISTINCT M2.meta_value
+    FROM {$wpdb->prefix}postmeta M1
+      LEFT JOIN {$wpdb->prefix}postmeta M2 ON M1.meta_value=M2.post_id
+    WHERE M1.post_id=P.ID AND M1.meta_key='_thumbnail_id' AND M2.meta_key='_wp_attached_file') 'featured',
   CONCAT_WS('/', P4.post_name, P3.post_name, P2.post_name, P.post_name) 'path'
 FROM {$wpdb->prefix}posts P
   LEFT JOIN {$wpdb->prefix}icl_translations T ON P.ID=element_id
