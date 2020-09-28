@@ -6,7 +6,7 @@ const xml2js = require("xml2js");
 const xpath = require("xml2js-xpath");
 // const accents = require('remove-accents');
 const cmdLineArgs = require('command-line-args');
-const chalk = require('chalk');
+const colors = require('ansi-colors');
 
 const fs = require('fs');
 const path = require('path');
@@ -34,6 +34,8 @@ const HTMLtoMardown = (html) => {
     bulletListMarker: '-'
   });
 
+  turndownService.use(require('joplin-turndown-plugin-gfm').gfm)
+
   turndownService.addRule('images', {
     filter: ['img'],
     replacement: (content, node, options) => {
@@ -44,10 +46,15 @@ const HTMLtoMardown = (html) => {
         height: node.getAttribute('height') ? node.getAttribute('height') : '',
       }
       let dimension = (attr.width || attr.height) ? ` =${attr.width}x${attr.height}` : ''
-      
-      return `![${attr.alt}](${attr.src}${dimension})`;
+
+      return `![${attr.alt}](${attr.src})`;
     }
   });
+
+  // Fix <p>
+  if (!/<p>/i.test(html)) {
+    html = '<p>' + html.replace(/(\r?\n){2}/g, '</p>\n\n<p>') + '</p>';
+  }
 
   return turndownService.turndown(html);
 }
@@ -59,13 +66,13 @@ let baseURL;
 
 fs.readFile(args.input, (error, data) => {
   if (error) {
-    console.error(chalk.red(`Can't access <${args.input}>!`));
+    console.error(colors.red(`Can't access <${args.input}>!`));
     process.exit(1);
   }
 
   parser.parseString(data, (error, result) => {
     if (error) {
-      console.error(chalk.red(error));
+      console.error(colors.red(error));
       process.exit(1);
     }
 
@@ -73,23 +80,23 @@ fs.readFile(args.input, (error, data) => {
 
     baseURL = new URL(xpath.evalFirst(result, `//options/siteurl`));
     baseURL = stripTrailingSlash(baseURL.host + baseURL.pathname);
-    console.log(chalk.magenta(baseURL));
+    console.log(colors.magenta(baseURL));
 
     xpath.find(result, `//pages/page`).forEach(page => {
       if (validatePage(page)) {
-        console.log(chalk.green(`${page.post_title} (ID:${page.ID})`));
+        console.log(colors.green(`${page.post_title} (ID:${page.ID})`));
         savePage(page);
       } else {
-        console.log(chalk.red(`${page.post_title} (ID:${page.ID})`));
+        console.log(colors.red(`${page.post_title} (ID:${page.ID})`));
       }
     });
 
     xpath.find(result, `//posts/post`).forEach(post => {
       if (validatePost(post)) {
-        console.log(chalk.green(`${post.post_title} (ID:${post.ID})`));
+        console.log(colors.green(`${post.post_title} (ID:${post.ID})`));
         savePost(post, result);
       } else {
-        console.log(chalk.red(`${post.post_title} (ID:${post.ID})`));
+        console.log(colors.red(`${post.post_title} (ID:${post.ID})`));
       }
     });
 
@@ -127,14 +134,14 @@ const cleanCategorySlug = (str) => {
 const stripBase = (str) => {
   return str
     // .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), replaceAttachment)
-    .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), '/static/images/$1.$2')
+    .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), '/images/$1.$2')
     .replace(new RegExp(`https?:\/\/${baseURL}\/(.*?)`, 'g'), '/$1');
 }
 
 const validatePage = (page) => {
   page.post_content = stripBase(page.post_content);
   // page.featured = stripBase(page.featured);
-  if (page.featured) page.featured = '/static/images/' + page.featured;
+  if (page.featured) page.featured = '/images/' + page.featured;
   return true;
 }
 
@@ -142,9 +149,11 @@ const savePage = (page) => {
 
   let content = `---\n`;
   content += `title: "${htmlEntities(page.post_title)}"\n`;
+  content += `description: ""\n`;
   content += `date: ${new Date(page.post_date_gmt+'Z').toISOString()}\n`;
   content += `updated: ${new Date(page.post_modified_gmt+'Z').toISOString()}\n`;
-  if (page.featured) content += `featured: ${page.featured}\n`;
+  // if (page.featured) content += `featured: ${page.featured}\n`;
+  content += `draft: true\n`;
   content += `wpID: ${page.ID}\n`;
   content += `---\n`;
   // content += `<!--\n${page.post_content}\n-->\n${HTMLtoMardown(page.post_content)}\n`;
@@ -166,8 +175,7 @@ const validatePost = (post) => {
   if (typeof post.category[0] !== 'undefined') return;
 
   post.post_content = stripBase(post.post_content);
-  // post.featured = stripBase(post.featured);
-  if (post.featured) post.featured = '/static/images/' + post.featured;
+  if (post.featured) post.featured = '/images/' + post.featured;
   return true;
 }
 
@@ -175,6 +183,7 @@ const savePost = (post, result) => {
 
   let content = `---\n`;
   content += `title: "${htmlEntities(post.post_title)}"\n`;
+  content += `description: ""\n`;
   content += `date: ${new Date(post.post_date_gmt+'Z').toISOString()}\n`;
   content += `updated: ${new Date(post.post_modified_gmt+'Z').toISOString()}\n`;
 
@@ -201,6 +210,7 @@ const savePost = (post, result) => {
   if (tags) content += `tags: [${tags.join(',')}]\n`;
 
   if (post.featured) content += `featured: ${post.featured}\n`;
+  content += `draft: true\n`;
   content += `wpID: ${post.ID}\n`;
   content += `---\n`;
   // content += `<!--\n${post.post_content}\n-->\n${HTMLtoMardown(post.post_content)}\n`;

@@ -6,6 +6,17 @@ From Wordpress to Markdown files for Static Generator(s)
 
 ### CHANGELOG
 
+- **0.3.0**
+  + [ ] Embed & galleries
+
+- **0.2.7** 2020-09-28
+  + [x] Fix Wordpress "no paragraph"
+
+- **0.2.6** 2020-09-22
+  + [x] add Draft: true
+  + [x] add Description: ""
+  + [x] No more featured on pages (Replaced by background in yaml).
+
 - **0.2.5** 2020-04-04
   + [x] Category "Invisible"
   + [x] No more doubling html+markdown
