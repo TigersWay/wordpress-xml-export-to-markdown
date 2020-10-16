@@ -56,6 +56,22 @@ const HTMLtoMardown = (html) => {
     html = '<p>' + html.replace(/(\r?\n){2}/g, '</p>\n\n<p>') + '</p>';
   }
 
+  // Inline & embedded
+  // [embed]https://youtu.be/x0PhfNNZN4c[/embed]
+  // [embed]https://www.youtube.com/watch?v=gebWPrCIF7s[/embed]
+  // [mappress mapid="179"]
+  // <p style="text-align: justify;">[mappress mapid="4"]</p>
+  // <code class="wp">[timetable agent="346579" from="Bangkok" to="Narathiwat" class="train" curr="THA"]</code>
+  // [gallery columns="2" size="large" ids="3373,3371"]
+  // [gallery type="slideshow" size="large" ids="629,630,631,632,633,634,635,636,637,638" orderby="rand"]
+  // [columns], [column]
+  // <p style="text-align: justify;">[table id=12 /]</p>
+  // [table id=93 responsive = flip responsive_breakpoint =  flip  /]
+  // [metaslider id="45409"]
+  // [bdotcom_bm bannerid="50157"]
+  // [video width="1280" height="720" mp4="http://theo-courant.com/wp-content/uploads/2014/10/Bangkok-et-ses-deux-aéroports.mp4" loop="true" autoplay="true" preload="auto"][/video]
+  html = html.replace(/\[embed\](.*)\[\/embed\]/g, '{% inline $1 %}').replace(/\[(.*)\]/g, '{% inline $1 %}');
+
   return turndownService.turndown(html);
 }
 
@@ -149,7 +165,7 @@ const savePage = (page) => {
 
   let content = `---\n`;
   content += `title: "${htmlEntities(page.post_title)}"\n`;
-  content += `description: ""\n`;
+  content += `description: "${htmlEntities(page.description)}"\n`;
   content += `date: ${new Date(page.post_date_gmt+'Z').toISOString()}\n`;
   content += `updated: ${new Date(page.post_modified_gmt+'Z').toISOString()}\n`;
   // if (page.featured) content += `featured: ${page.featured}\n`;
@@ -183,7 +199,7 @@ const savePost = (post, result) => {
 
   let content = `---\n`;
   content += `title: "${htmlEntities(post.post_title)}"\n`;
-  content += `description: ""\n`;
+  content += `description: "${htmlEntities(post.description)}"\n`;
   content += `date: ${new Date(post.post_date_gmt+'Z').toISOString()}\n`;
   content += `updated: ${new Date(post.post_modified_gmt+'Z').toISOString()}\n`;
 

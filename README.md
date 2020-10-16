@@ -7,7 +7,13 @@ From Wordpress to Markdown files for Static Generator(s)
 ### CHANGELOG
 
 - **0.3.0**
-  + [ ] Embed & galleries
+  + [ ] Youtube
+  + [ ] Galleries & download attachments
+  + [ ] Other "Embed"
+  + [x] Set npm script-shell to do real cross platform!
+
+- **0.2.9** 2020-10-16
+  + [x] Recover 'Description'
 
 - **0.2.7** 2020-09-28
   + [x] Fix Wordpress "no paragraph"

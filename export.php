@@ -152,13 +152,15 @@ SELECT
     FROM {$wpdb->prefix}postmeta M1
       LEFT JOIN {$wpdb->prefix}postmeta M2 ON M1.meta_value=M2.post_id
     WHERE M1.post_id=P.ID AND M1.meta_key='_thumbnail_id' AND M2.meta_key='_wp_attached_file') 'featured',
-  CONCAT_WS('/', P4.post_name, P3.post_name, P2.post_name, P.post_name) 'path'
+  CONCAT_WS('/', P4.post_name, P3.post_name, P2.post_name, P.post_name) 'path',
+  M3.meta_value 'description'
 FROM {$wpdb->prefix}posts P
   LEFT JOIN {$wpdb->prefix}icl_translations T ON P.ID=element_id
+  LEFT JOIN {$wpdb->prefix}postmeta M3 ON P.ID=M3.post_id
   LEFT JOIN {$wpdb->prefix}posts P2 ON P.post_parent=P2.ID
     LEFT JOIN {$wpdb->prefix}posts P3 ON P2.post_parent=P3.ID
       LEFT JOIN {$wpdb->prefix}posts P4 ON P3.post_parent=P4.ID
-WHERE P.post_type='page' AND P.post_status='publish' AND element_type='post_page'
+WHERE P.post_type='page' AND P.post_status='publish' AND element_type='post_page' AND M3.meta_key='gavern-post-desc'
 EOT);
 foreach($items as $item) {
   echo $item->post_title . '<br>';
@@ -232,10 +234,12 @@ SELECT
   (SELECT DISTINCT M2.meta_value
     FROM {$wpdb->prefix}postmeta M1
       LEFT JOIN {$wpdb->prefix}postmeta M2 ON M1.meta_value=M2.post_id
-    WHERE M1.post_id=P.ID AND M1.meta_key='_thumbnail_id' AND M2.meta_key='_wp_attached_file') 'featured'
+    WHERE M1.post_id=P.ID AND M1.meta_key='_thumbnail_id' AND M2.meta_key='_wp_attached_file') 'featured',
+  M3.meta_value 'description'
 FROM {$wpdb->prefix}posts P
   LEFT JOIN {$wpdb->prefix}icl_translations T ON ID=element_id
-WHERE post_type='post' AND post_status='publish' AND element_type='post_post'
+  LEFT JOIN {$wpdb->prefix}postmeta M3 ON P.ID=M3.post_id
+WHERE post_type='post' AND post_status='publish' AND element_type='post_post' AND M3.meta_key='gavern-post-desc'
 EOT);
 foreach($items as $item) {
   echo $item->post_title . '<br>';

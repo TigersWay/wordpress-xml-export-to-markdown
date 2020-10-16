@@ -3,11 +3,10 @@ desktop.ini
 folder.ico
 
 # (p)npm
-node_modules/
+node_modules
 pnpm-lock.yaml
 
 # Project
-wordpress/
 export.xml
-attachments.*
-2020-*/
+attachments.txt
+wordpress
