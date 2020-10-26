@@ -1,7 +1,7 @@
 <?php
 /**
  * Generic export bricks from wordpress
- * v0.2.5
+ * v0.3.1
  * Ben Michaud <ben@tigersway.net>
  *
  * Features:
@@ -18,7 +18,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
-  <title>Export wordpress</title>
+  <title>Export wordpress (v0.3.0)</title>
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
@@ -37,7 +37,6 @@ global $wpdb;
 
 // theo-courant
 $wpdb->select('4443919-1');
-
 
 
 class XMLExport {
@@ -91,18 +90,7 @@ class XMLExport {
   }
 }
 
-function fixSerializedObject($strObject) {
-  return unserialize(preg_replace('/O:\d+:"[^"]++"/', 'O:8:"stdClass"', $strObject));
-}
 
-function saveAttachment($url) {
-  static $first = true;
-  if ($first) {
-    fclose(fopen('./attachments.txt', 'w'));
-    $first = false;
-  }
-  file_put_contents ('./attachments.txt', preg_replace('/.*\/wp-content\/uploads\/(.*)$/', "$1", $url) . "\n", FILE_APPEND);
-}
 
 $xml = new XMLExport();
 $xml->startElement('wordpress');
@@ -120,6 +108,25 @@ foreach($items as $item) {
 }
 unset($items);
 $xml->endElement();
+
+
+function expandGalleries(&$html) {
+  $html = preg_replace_callback(
+    '~\[gallery .*ids="(.*?)".*]~',
+    function ($keys) {
+      global $wpdb;
+      $gallery = '';
+      foreach (explode(',', $keys[1]) as $key) {
+        if ($image = $wpdb->get_row("SELECT post_title 'alt', guid 'url' FROM {$wpdb->prefix}posts WHERE ID=$key")) {
+          $gallery .= "<img class=\"gallery\" src=\"$image->url\" alt=\"$image->alt\">";
+        } else { // it doesn't seem to happen
+          $gallery .= "<img class=\"gallery\" data-src=\"$key\" alt=\"...\">";
+        }
+      }
+      return $gallery;
+    },
+    $html);
+}
 
 
 echo '<h3>Authors</h3><div>'; // -----------------------------------------------
@@ -163,15 +170,12 @@ FROM {$wpdb->prefix}posts P
 WHERE P.post_type='page' AND P.post_status='publish' AND element_type='post_page' AND M3.meta_key='gavern-post-desc'
 EOT);
 foreach($items as $item) {
+  unset($item->post_content_filtered);
   echo $item->post_title . '<br>';
-  $xml->startElement('page'); $xml->elements($item); $xml->endElement();
-
-  if ($item->featured) saveAttachment($item->featured);
-  $urls = [];
-  preg_match_all('/https?:\/\/theo-courant.com\/wp-content\/uploads\/.*?(?:jpg|jpeg|png|gif)/i', $item->post_content, $urls);
-  if ($urls) {
-    foreach($urls[0] as $url) saveAttachment($url);
-  }
+  $xml->startElement('page');
+  expandGalleries($item->post_content);
+  $xml->elements($item, ['post_title', 'post_content']);
+  $xml->endElement();
 }
 echo "</div><p><i>" . sizeof($items) . " pages</i></p>\n";
 unset($items);
@@ -242,41 +246,19 @@ FROM {$wpdb->prefix}posts P
 WHERE post_type='post' AND post_status='publish' AND element_type='post_post' AND M3.meta_key='gavern-post-desc'
 EOT);
 foreach($items as $item) {
+  unset($item->post_content_filtered);
   echo $item->post_title . '<br>';
   $xml->startElement('post');
+  expandGalleries($item->post_content);
   $xml->elements($item, ['post_title', 'post_content']);
   terms($item->ID);
   $xml->endElement();
-
-  if ($item->featured) saveAttachment($item->featured);
-  $urls = [];
-  preg_match_all('/https?:\/\/theo-courant.com\/wp-content\/uploads\/.*?(?:jpg|jpeg|png|gif)/i', $item->post_content, $urls);
-  if ($urls) {
-    foreach($urls[0] as $url) saveAttachment($url);
-  }
 }
 echo "</div><p><i>" . sizeof($items) . " posts</i></p>\n";
 unset($items);
 $xml->endElement();
 
-
-// echo '<h3>MapPress</h3><div>'; // ----------------------------------------------
-//
-// $xml->startElement('mappress');
-// $items = $wpdb->get_results(<<<EOT
-// SELECT *
-// FROM {$wpdb->prefix}mappress_maps
-// ORDER BY mapid
-// EOT);
-// foreach($items as $item) {
-//   $map = fixSerializedObject($item->obj);
-//   echo $map->title . '<br>';
-//   $xml->startElement('map'); $xml->element('ID', $map->mapid); $xml->element('json', json_encode($map)); $xml->endElement();
-// }
-// echo "</div><p><i>" . sizeof($items) . " maps</i></p>\n";
-// unset($items);
-// $xml->endElement();
-
-
 $xml->endElement(true);
+
+
 echo '<h3>Done!</h3>';

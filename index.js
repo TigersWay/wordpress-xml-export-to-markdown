@@ -2,14 +2,18 @@
 
 // dependencies
 
-const xml2js = require("xml2js");
-const xpath = require("xml2js-xpath");
-// const accents = require('remove-accents');
-const cmdLineArgs = require('command-line-args');
-const colors = require('ansi-colors');
+const
+  xml2js = require('xml2js'),
+  xpath = require('xml2js-xpath'),
+  axios = require('axios'),
+  limit = require('p-limit')(8),
+  // sharp = require('sharp'),
+  cmdLineArgs = require('command-line-args'),
+  colors = require('ansi-colors');
 
-const fs = require('fs');
-const path = require('path');
+const
+  fs = require('fs'),
+  path = require('path');
 
 
 // Definitions for command line araguments
@@ -23,146 +27,111 @@ const args = cmdLineArgs(definitions);
 
 // Initialisation
 
+let baseURL, images;
+
 const parser = new xml2js.Parser({  // https://github.com/Leonidas-from-XIV/node-xml2js#options
   explicitArray: false,
   tagNameProcessors: [ xml2js.processors.stripPrefix ],
 });
 
-const HTMLtoMardown = (html) => {
-  const turndownService = new require('turndown')({
-    headingStyle: 'atx',
-    bulletListMarker: '-'
-  });
-
-  turndownService.use(require('joplin-turndown-plugin-gfm').gfm)
-
-  turndownService.addRule('images', {
+const turndownService = new require('turndown')({
+  headingStyle: 'atx',
+  bulletListMarker: '-'
+})
+  .use(require('joplin-turndown-plugin-gfm').gfm)
+  .addRule('images', {
     filter: ['img'],
-    replacement: (content, node, options) => {
+    replacement: (content, node) => {
       let attr = {
         src: node.getAttribute('src'),
         alt: node.getAttribute('alt') ? node.getAttribute('alt') : path.parse(node.getAttribute('src')).name.replace(/-+\d{1,}x\d{1,}$/, ''),
         width: node.getAttribute('width') ? node.getAttribute('width') : '',
         height: node.getAttribute('height') ? node.getAttribute('height') : '',
-      }
-      let dimension = (attr.width || attr.height) ? ` =${attr.width}x${attr.height}` : ''
+      };
+      // let dimension = (attr.width || attr.height) ? ` =${attr.width}x${attr.height}` : '';
 
       return `![${attr.alt}](${attr.src})`;
     }
   });
 
-  // Fix <p>
+
+// All the different functions
+
+// const wait = (ms = 1, value = ms) => new Promise(resolve => setTimeout(() => resolve(value), ms*1000));
+
+const stripTrailingSlash = (str) => str.replace(/\/$/, '');
+
+const htmlEntities = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const stripBase = (str) => {
+  return str.replace(new RegExp(`https?://${baseURL}/wp-content/uploads/([^ ]*?)(?:-e\\d{8,})?(?:-\\d{1,4}x\\d{1,4})?.(jpg|jpeg|mp4|png|gif)`, 'g'), (match, filename, ext) => {
+    // getImage(`https://${baseURL}/wp-content/uploads/${filename}.${ext}`, `${args.output}/images/${filename}.${ext}`);
+    images.push(`${filename}.${ext}`);
+    return `/images/${filename}.${ext}`;
+  })
+    .replace(new RegExp(`https?://${baseURL}/(.*?)`, 'g'), '/$1');
+};
+
+const logger = (filename, str) => {
+  const dirname = path.join(args.output, path.dirname(filename));
+  if (!fs.existsSync(dirname)) fs.mkdirSync(dirname, {recursive: true});
+
+  fs.appendFileSync(`${args.output}/${filename}.log`, `${str}\n`);
+};
+
+const HTMLtoMardown = (html, ID) => {
+
+  // Fix <p>. Really hate wordpress!
   if (!/<p>/i.test(html)) {
     html = '<p>' + html.replace(/(\r?\n){2}/g, '</p>\n\n<p>') + '</p>';
   }
 
-  // Inline & embedded
-  // [embed]https://youtu.be/x0PhfNNZN4c[/embed]
-  // [embed]https://www.youtube.com/watch?v=gebWPrCIF7s[/embed]
+  // MetaSlider
+  // [metaslider id="45409"]
+  if (/\[metaslider .*]/.test(html)) logger('metaslider', ID);
+
+  // Mappress
   // [mappress mapid="179"]
   // <p style="text-align: justify;">[mappress mapid="4"]</p>
-  // <code class="wp">[timetable agent="346579" from="Bangkok" to="Narathiwat" class="train" curr="THA"]</code>
-  // [gallery columns="2" size="large" ids="3373,3371"]
-  // [gallery type="slideshow" size="large" ids="629,630,631,632,633,634,635,636,637,638" orderby="rand"]
-  // [columns], [column]
+  if (/\[mappress .*]/.test(html)) logger('mappress', ID);
+
+  // Tablepress
   // <p style="text-align: justify;">[table id=12 /]</p>
-  // [table id=93 responsive = flip responsive_breakpoint =  flip  /]
-  // [metaslider id="45409"]
-  // [bdotcom_bm bannerid="50157"]
+  // [table id=93 responsive = flip responsive_breakpoint = flip /]
+  if (/\[table .*]/.test(html)) logger('tablepress', ID);
+
   // [video width="1280" height="720" mp4="http://theo-courant.com/wp-content/uploads/2014/10/Bangkok-et-ses-deux-aéroports.mp4" loop="true" autoplay="true" preload="auto"][/video]
-  html = html.replace(/\[embed\](.*)\[\/embed\]/g, '{% inline $1 %}').replace(/\[(.*)\]/g, '{% inline $1 %}');
+  if (/\[video .*]/.test(html)) logger('video', ID);
+
+  // <code class="wp">[timetable agent="346579" from="Bangkok" to="Narathiwat" class="train" curr="THA"]</code>
+
+  // [bdotcom_bm bannerid="50157"]
+
+  // columns & column
+  html = html
+    .replace(/\[columns]/g, '{% columns %}')
+    .replace(/\[\/columns]/g, '{% endcolumns %}')
+    .replace(/\[column]/g, '{% column %}')
+    .replace(/\[\/column]/g, '{% endcolumn %}');
+
+  // Youtube
+  // [embed]https://youtu.be/x0PhfNNZN4c[/embed]
+  // [embed]https://www.youtube.com/watch?v=gebWPrCIF7s[/embed]
+  html = html.replace(/\[embed](.*youtu(be\.com|\.be).*)\[\/embed]/g, '{% inline "youtube", ID="$1" %}');
+
+  // Embedded and unknown so far
+  //html = html.replace(/\[embed](.*)\[\/embed]/g, '{% inline $1 %}').replace(/\[(.*)]/g, '{% inline $1 %}');
 
   return turndownService.turndown(html);
-}
-
-
-// And run!
-
-let baseURL;
-
-fs.readFile(args.input, (error, data) => {
-  if (error) {
-    console.error(colors.red(`Can't access <${args.input}>!`));
-    process.exit(1);
-  }
-
-  parser.parseString(data, (error, result) => {
-    if (error) {
-      console.error(colors.red(error));
-      process.exit(1);
-    }
-
-    if (!fs.existsSync(args.output)) fs.mkdirSync(args.output, {recursive: true});
-
-    baseURL = new URL(xpath.evalFirst(result, `//options/siteurl`));
-    baseURL = stripTrailingSlash(baseURL.host + baseURL.pathname);
-    console.log(colors.magenta(baseURL));
-
-    xpath.find(result, `//pages/page`).forEach(page => {
-      if (validatePage(page)) {
-        console.log(colors.green(`${page.post_title} (ID:${page.ID})`));
-        savePage(page);
-      } else {
-        console.log(colors.red(`${page.post_title} (ID:${page.ID})`));
-      }
-    });
-
-    xpath.find(result, `//posts/post`).forEach(post => {
-      if (validatePost(post)) {
-        console.log(colors.green(`${post.post_title} (ID:${post.ID})`));
-        savePost(post, result);
-      } else {
-        console.log(colors.red(`${post.post_title} (ID:${post.ID})`));
-      }
-    });
-
-    console.log('Done!');
-
-  });
-
-});
-
-
-const stripTrailingSlash = (str) => {
-  return str.replace(/\/$/, '');
-}
-
-const htmlEntities = (str) => {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-const cleanCategorySlug = (str) => {
-  return str
-    .replace(/mynamar-(\w+)/, 'myanmar-$1')
-    .replace(/(?:bangkok|cambodge|laos|malaisie|myanmar|thailande)-(?:transports-)*(\w+)/, '$1');
-}
-
-// const replaceAttachment = (match, p1, p2, offset, string) => {
-//   let cleaned = accents.remove(decodeURI(p1)).toLowerCase();
-//   fs.appendFileSync(path.join(args.output, 'attachment.txt'), `curl -sk -A Export --create-dirs -o "${cleaned}.${p2}" "https://${baseURL}/wp-content/uploads/${p1}.${p2}"\n`);
-//   return `/static/images/${cleaned}.${p2}`;
-// }
-
-const stripBase = (str) => {
-  return str
-    // .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), replaceAttachment)
-    .replace(new RegExp(`https?:\/\/${baseURL}\/wp-content\/uploads\/(.*?).(jpg|jpeg|mp4|png|gif)`, 'g'), '/images/$1.$2')
-    .replace(new RegExp(`https?:\/\/${baseURL}\/(.*?)`, 'g'), '/$1');
-}
+};
 
 const validatePage = (page) => {
   page.post_content = stripBase(page.post_content);
-  // page.featured = stripBase(page.featured);
   if (page.featured) page.featured = '/images/' + page.featured;
   return true;
-}
+};
 
-const savePage = (page) => {
-
+const savePage = async (page) => {
   let content = `---\n`;
   content += `title: "${htmlEntities(page.post_title)}"\n`;
   content += `description: "${htmlEntities(page.description)}"\n`;
@@ -172,31 +141,35 @@ const savePage = (page) => {
   content += `draft: true\n`;
   content += `wpID: ${page.ID}\n`;
   content += `---\n`;
-  // content += `<!--\n${page.post_content}\n-->\n${HTMLtoMardown(page.post_content)}\n`;
-  content += HTMLtoMardown(page.post_content);
+  content += HTMLtoMardown(String(page.post_content), page.ID);
 
   let fullpathname;
   if (~[3504, 19674, 46895].indexOf(Number(page.ID))) {
+    // Homepage & outside pages
     fullpathname = [args.output, page.language_code, page.post_name+'.md'].join('/');
   } else {
     fullpathname = [args.output, page.language_code, page.path, '_index.md'].join('/');
   }
   if (!fs.existsSync(path.dirname(fullpathname))) fs.mkdirSync(path.dirname(fullpathname), {recursive: true});
   fs.writeFileSync(fullpathname, content);
-}
-
+};
 
 const validatePost = (post) => {
   if (typeof post.category === 'undefined') return;
   if (typeof post.category[0] !== 'undefined') return;
 
   post.post_content = stripBase(post.post_content);
-  if (post.featured) post.featured = '/images/' + post.featured;
+  if (post.featured) post.featured = stripBase(`https://${baseURL}/wp-content/uploads/${post.featured}`);
   return true;
-}
+};
+
+const cleanCategorySlug = (str) => {
+  return str
+    .replace(/mynamar-(\w+)/, 'myanmar-$1')
+    .replace(/(?:bangkok|cambodge|laos|malaisie|myanmar|thailande)-(?:transports-)*(\w+)/, '$1');
+};
 
 const savePost = (post, result) => {
-
   let content = `---\n`;
   content += `title: "${htmlEntities(post.post_title)}"\n`;
   content += `description: "${htmlEntities(post.description)}"\n`;
@@ -210,13 +183,11 @@ const savePost = (post, result) => {
   if (typeof category !== 'undefined' || typeof category.slug !== 'undefined') {
     category = xpath.evalFirst(result, `//categories/category[slug='${category.slug}']`);
     tmp = cleanCategorySlug(category.slug);
-    // tags.push(tmp);
     fullpathname = tmp;
     while (category.parent) {
       let category2 = xpath.evalFirst(result, `//categories/category[slug='${category.parent}']`);
       category = {...category2};
       tmp = cleanCategorySlug(category.slug);
-      // tags.push(tmp);
       fullpathname = tmp + '/' + fullpathname;
     }
   }
@@ -229,10 +200,107 @@ const savePost = (post, result) => {
   content += `draft: true\n`;
   content += `wpID: ${post.ID}\n`;
   content += `---\n`;
-  // content += `<!--\n${post.post_content}\n-->\n${HTMLtoMardown(post.post_content)}\n`;
-  content += HTMLtoMardown(post.post_content);
+  content += HTMLtoMardown(String(post.post_content), post.ID);
 
   fullpathname = [args.output, post.language_code, fullpathname , post.post_name+'.md'].join('/');
   if (!fs.existsSync(path.dirname(fullpathname))) fs.mkdirSync(path.dirname(fullpathname), {recursive: true});
   fs.writeFileSync(fullpathname, content);
-}
+};
+
+const getImage = (url, filename) => {
+  return new Promise(resolve => {
+    if (!fs.existsSync(filename)) {
+
+      axios.get(encodeURI(url), {responseType: 'arraybuffer'})
+        .then(response => {
+          console.log(colors.yellow(url));
+          fs.mkdirSync(path.dirname(filename), {recursive: true});
+          // switch (path.extname(filename).toLowerCase()) {
+          //   case '.jpg':
+          //   case '.jpeg':
+          //     sharp(response.data).resize({ width: 1920, height: 1080, fit: 'inside', withoutEnlargement: true})
+          //       // .jpeg({quality: 60, chromaSubsampling: '4:2:0'})
+          //       .toFile(filename)
+          //       .then(() => resolve())
+          //       .catch(error => {
+          //         console.log(colors.red(error));
+          //         return reject();
+          //       });
+          //     break;
+          //   case '.png':
+          //     sharp(response.data).resize({ width: 1920, height: 1080, fit: 'inside', withoutEnlargement: true})
+          //       // .png({quality: 80})
+          //       .toFile(filename)
+          //       .then(() => resolve())
+          //       .catch(error => {
+          //         console.log(colors.red(error));
+          //         return reject();
+          //       });
+          //     break;
+          //   default:
+          //     fs.writeFileSync(filename, response.data);
+          //     resolve();
+          // }
+          fs.writeFileSync(filename, response.data);
+          resolve();
+        })
+        .catch(error => {
+          console.log(colors.red(`${error.response.status}: ${url}`));
+          logger('images', `${error.response.status}: ${url} (${filename})`);
+          resolve();
+        });
+
+    } else resolve();
+  });
+};
+
+
+// And now, let's go!
+
+(async () => {
+
+  const hrstart = process.hrtime();
+  console.info(colors.magentaBright(`--- Starting ---`));
+
+  let result;
+  try {
+    result = await parser.parseStringPromise(fs.readFileSync(args.input));
+  } catch (e) {
+    console.error(colors.red(e.message));
+    process.exit();
+  }
+
+  if (!fs.existsSync(args.output)) fs.mkdirSync(args.output, {recursive: true});
+
+  // Base URL
+  baseURL = new URL(xpath.evalFirst(result, `//options/siteurl`));
+  baseURL = stripTrailingSlash(baseURL.host + baseURL.pathname);
+  console.info(colors.cyan(baseURL));
+
+  // Every page
+  for (const page of xpath.find(result, `//pages/page`)) {
+    images = [];
+    if (validatePage(page)) {
+      console.log(colors.green('%s (ID:%d)'), page.post_title, page.ID);
+      savePage(page);
+      // await Promise.all([1, 2].map(time => limit(() => wait(time).then(console.log))))
+      await Promise.all(images.map(image => limit(() => getImage(`https://${baseURL}/wp-content/uploads/${image}`, `${args.output}/images/${image}`))));
+    } else {
+      console.log(colors.red('%s (ID:%d)'), page.post_title, page.ID);
+    }
+  }
+
+  // Every post
+  for (const post of xpath.find(result, `//posts/post`)) {
+    if (validatePost(post)) {
+      console.log(colors.green('%s (ID:%d)'), post.post_title, post.ID);
+      savePost(post, result);
+    } else {
+      console.log(colors.red('%s (ID:%d)'), post.post_title, post.ID);
+    }
+  }
+
+  const hrend = process.hrtime(hrstart);
+  console.info(colors.magentaBright(`--- Done --- : ${hrend[0]}s ${hrend[1] / 1000000}ms`));
+  colors.reset();
+})();

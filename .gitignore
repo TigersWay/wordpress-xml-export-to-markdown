@@ -1,12 +1,27 @@
-# Windows
+# Windows, IDE & Personal preferences
 desktop.ini
 folder.ico
+.vscode
+.editorconfig
+.eslintrc.js
 
 # (p)npm
 node_modules
+package-lock.json
 pnpm-lock.yaml
 
-# Project
+# Distribution or Generated output
+dist
+public
+
+# dotenv environment variables file
+.env*
+
+# Logs
+logs
+*.log*
+
+# This project
 export.xml
 attachments.txt
 wordpress

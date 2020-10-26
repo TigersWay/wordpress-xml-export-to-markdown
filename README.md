@@ -6,11 +6,14 @@ From Wordpress to Markdown files for Static Generator(s)
 
 ### CHANGELOG
 
+- **0.3.1**
+  + [x] All images downloaded but finally not cropped under 1920x1080 if needed (Riot does a btter job)
+
 - **0.3.0**
-  + [ ] Youtube
-  + [ ] Galleries & download attachments
-  + [ ] Other "Embed"
-  + [x] Set npm script-shell to do real cross platform!
+  + [x] Complete re-write of embedded galleries & attachment downloads
+  + [x] Youtube
+  + [x] Complete code logic re-write (Asynchronous)
+  + [x] Set (p)npm script-shell to do real cross platform!
 
 - **0.2.9** 2020-10-16
   + [x] Recover 'Description'
@@ -29,7 +32,7 @@ From Wordpress to Markdown files for Static Generator(s)
   + [x] Don't add "categories" to "tags" anymore
   + [x] Pages as _index
   + [x] Complete rewrite of img tags: alt, width & height
-  
+
 
 - **0.2.4** 2020-03-12
   + [x] better retrieve of "featured" images

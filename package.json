@@ -9,7 +9,7 @@
     "markdown",
     "static-site-generator"
   ],
-  "version": "0.2.9",
+  "version": "0.3.1",
   "license": "MIT",
   "author": "Ben Michaud <ben@tigersway.net>",
   "repository": {
@@ -20,12 +20,16 @@
     "wp2md": "./index.js"
   },
   "scripts": {
-    "wp2md": "rm -rf wordpress/{fr,en} && node .  -i export.xml"
+    "wp2md": "rm -rf wordpress/{fr,en,*.log} && node .  -o wordpress -i export.xml",
+    "test": "rm -rf public/{fr,en,*.log} && node .  -o public -i export.xml"
   },
   "dependencies": {
     "ansi-colors": "^4.1.1",
+    "axios": "^0.21.0",
     "command-line-args": "^5.1.1",
     "joplin-turndown-plugin-gfm": "^1.0.12",
+    "p-limit": "^3.0.2",
+    "sharp": "^0.26.2",
     "turndown": "^7.0.0",
     "xml2js": "^0.4.23",
     "xml2js-xpath": "^0.11.0"
